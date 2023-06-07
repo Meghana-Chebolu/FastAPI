@@ -1,38 +1,59 @@
+import uvicorn
 from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi_sqlalchemy import DBSessionMiddleware, db
+
+from app.schema import Book as SchemaBook
+from app.schema import Author as SchemaAuthor
+
+from app.schema import Book
+from app.schema import Author
+
+from app.models import Book as ModelBook
+from app.models import Author as ModelAuthor
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv('.env')
 
 app = FastAPI()
 
-item_master = { 1 : "This is a Mango.",
-                2 : "This is an Apple.",
-                3 : "This is a Banana.",
-                4 : "This is an Orange.",
-                5 : "This is a Pear.", 
-                }
-
-class Item(BaseModel):
-    name: str
-    description: str | None = None
-    price: float
-    tax: float | None = None
-
+# to avoid csrftokenError
+app.add_middleware(DBSessionMiddleware, db_url=os.environ['DATABASE_URL'])
 
 @app.get("/")
 async def root():
-    return {" message": "Hello World"}
+   return {"message": "hello world"}
 
-@app.get("/items")
-async def items():
-    return { "items" : item_master }
 
-@app.get("/items/{item_id}")
-async def get_item(item_id: int,short: bool = False):
-    if short == True: 
-        return {"item" : item_master[item_id]}
-    else:
-        return {"item" : "This is a long description"}
-   
-@app.post("/items")
-async def create_item(item:Item):
-    return item
+@app.post('/book/', response_model=SchemaBook)
+async def book(book: SchemaBook):
+   db_book = ModelBook(title=book.title, rating=book.rating, author_id = book.author_id)
+   db.session.add(db_book)
+   db.session.commit()
+   return db_book
+
+@app.get('/books/')
+async def book():
+   book = db.session.query(ModelBook).all()
+   return book
+
+
+@app.post('/author/', response_model=SchemaAuthor)
+async def author(author:SchemaAuthor):
+   db_author = ModelAuthor(name=author.name, age=author.age)
+   db.session.add(db_author)
+   db.session.commit()
+   return db_author
+
+@app.get('/authors/')
+async def author():
+   author = db.session.query(ModelAuthor).all()
+   return author
+
+
+# To run locally
+if __name__ == '__main__':
+   uvicorn.run(app, host='0.0.0.0', port=8000)
+
 
